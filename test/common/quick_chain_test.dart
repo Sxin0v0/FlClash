@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:fl_clash/common/quick_chain.dart';
 import 'package:fl_clash/models/clash_config.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -64,7 +66,9 @@ void main() {
       ),
     );
     expect(
-      ProfileOverrides.fromJson(original.toJson()).quickChain,
+      ProfileOverrides.fromJson(
+        jsonDecode(jsonEncode(original)) as Map<String, dynamic>,
+      ).quickChain,
       original.quickChain,
     );
   });
