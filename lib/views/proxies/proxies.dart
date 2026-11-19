@@ -8,6 +8,7 @@ import 'package:fl_clash/widgets/widgets.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'quick_chain.dart';
 import 'tab.dart';
 
 class ProxiesView extends ConsumerStatefulWidget {
@@ -162,6 +163,23 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
       primaryAction: primaryAction,
       searchActions: [?primaryAction],
       iconActions: [
+        if (!picker &&
+            ref.watch(currentProfileProvider.select(
+              (profile) => profile != null &&
+                  profile.type != ProfileType.custom,
+            )))
+          IconButtonData(
+            glyph: AppGlyphs.link,
+            tooltip: '快捷链式代理',
+            onPressed: () {
+              final profileId = ref.read(currentProfileIdProvider);
+              if (profileId == null) return;
+              showNestedSheet<void>(
+                context,
+                builder: (_) => QuickChainSheet(profileId: profileId),
+              );
+            },
+          ),
         if (_isTab && !picker)
           IconButtonData(
             glyph: AppGlyphs.locate,

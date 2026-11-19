@@ -1640,6 +1640,20 @@ Map<String, Object?> _withLegacyTunOverride(Map<String, Object?> json) {
 }
 
 @freezed
+abstract class QuickChain with _$QuickChain {
+  const factory QuickChain({
+    @Default(false) bool enabled,
+    @Default('') String entry,
+    @Default('') String exit,
+    @Default('') String group,
+    @Default('') String previousSelection,
+  }) = _QuickChain;
+
+  factory QuickChain.fromJson(Map<String, Object?> json) =>
+      _$QuickChainFromJson(json);
+}
+
+@freezed
 abstract class ProfileOverrides with _$ProfileOverrides {
   const factory ProfileOverrides({
     @Default(defaultDns) @JsonKey(fromJson: Dns.safeDnsFromJson) Dns dns,
@@ -1668,6 +1682,7 @@ abstract class ProfileOverrides with _$ProfileOverrides {
     @Default({})
     @JsonKey(name: 'proxy-providers')
     Map<String, ProxyProviderOptions> proxyProviders,
+    @Default(QuickChain()) QuickChain quickChain,
   }) = _ProfileOverrides;
 
   factory ProfileOverrides.fromJson(Map<String, Object?> json) =>

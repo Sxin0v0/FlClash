@@ -538,7 +538,8 @@ class SetupAction extends _$SetupAction {
     final isCustom = setupState.profileType == ProfileType.custom;
     final scriptContent = isCustom ? null : await setupState.script?.content;
     final hasScript = scriptContent?.isNotEmpty == true;
-    final profileBase = !isCustom && !hasScript
+    final hasQuickChain = setupState.overrides.quickChain.enabled;
+    final profileBase = !isCustom && !hasScript && !hasQuickChain
         ? await _core.getProfileBase(profileId)
         : null;
     Map<String, dynamic> rawConfig = isCustom
