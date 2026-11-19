@@ -665,3 +665,125 @@ jobs:
           target-branch: main
           commit-message: Update from ${{ github.ref_name }}
           target-directory: /tmp/
+
+  quick_chain_windows:
+    if: github.repository == 'Sxin0v0/FlClash' && github.ref == 'refs/heads/quick-chain'
+    runs-on: windows-2022
+    timeout-minutes: 180
+    steps:
+      - name: Check out Quick Chain source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Allow long Git paths
+        shell: pwsh
+        run: git config --global core.longpaths true
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: core/go.sum
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: quick-chain-windows
+          workspaces: |
+            services/helper
+            plugins/rust_api/rust
+          cache-directories: .dart_tool/hooks_runner
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Fetch CA certificates pinned by upstream
+        shell: bash
+        env:
+          CA_BUNDLE: cacert-2026-09-25.pem
+          CA_BUNDLE_SHA256: a41b5d356aea97a529fe27e0f7316d2f9d946d75927476cf9cf1b90637d00505
+        run: |
+          set -euo pipefail
+          bundle=core/Clash.Meta/component/ca/ca-certificates.crt
+          curl -fsSL --retry 3 -o "$bundle" "https://curl.se/ca/$CA_BUNDLE"
+          echo "$CA_BUNDLE_SHA256  $bundle" | sha256sum -c -
+
+      - name: Install Flutter dependencies
+        shell: pwsh
+        run: |
+          flutter --version
+          flutter pub get
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Generate Freezed, JSON and Riverpod sources
+        shell: pwsh
+        run: |
+          dart run build_runner build --delete-conflicting-outputs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Static analysis
+        shell: pwsh
+        run: |
+          flutter analyze --no-fatal-infos
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Quick Chain tests
+        shell: pwsh
+        run: |
+          flutter test test/common/quick_chain_test.dart
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build Windows installer and portable bundle
+        shell: pwsh
+        run: |
+          dart tool/package.dart windows --env dev --tag "$env:RELEASE_TAG" -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify installer, portable ZIP, and hashes
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem dist -Filter '*-setup.exe' -File
+          $portable = Get-ChildItem dist -Filter '*-portable.zip' -File
+          $sums = Get-ChildItem dist -Filter '*SHA256SUMS' -File
+          if (-not $installer -or -not $portable -or -not $sums) {
+            throw 'Missing one or more Windows release outputs'
+          }
+          Get-ChildItem dist -File | Select-Object Name, Length
+
+      - name: Upload installable Windows packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlClash-QuickChain-Windows-x64
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/*SHA256SUMS
+            dist/manifest.json
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Publish GitHub Release
+        if: ${{ github.ref == 'refs/heads/quick-chain' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          name: FlClash Quick Chain ${{ env.RELEASE_TAG }} (unofficial)
+          body: |
+            Unofficial Windows x64 FlClash build with a quick two-hop proxy chain GUI.
+            Download the setup EXE for installation or the portable ZIP for a self-contained runner.
+            Back up your existing FlClash data. This fork uses the same Windows app identity as upstream.
+            Unsigned community binaries may trigger Windows SmartScreen.
+          prerelease: true
+          files: |
+            dist/*.exe
+            dist/*.zip
+            dist/*SHA256SUMS
+            dist/manifest.json
+          fail_on_unmatched_files: true
