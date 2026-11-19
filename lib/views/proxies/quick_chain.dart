@@ -183,7 +183,7 @@ class _QuickChainSheetState extends ConsumerState<QuickChainSheet> {
             eligibleGroups.contains(_group));
     final saved = profile?.overrides.quickChain;
     final summary = saved?.enabled == true
-        ? '已配置: ' + saved!.entry + ' → ' + saved.exit
+        ? '已配置: ${saved!.entry} → ${saved.exit}'
         : '未启用';
 
     return Scaffold(
