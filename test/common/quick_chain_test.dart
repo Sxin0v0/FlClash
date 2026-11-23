@@ -44,6 +44,51 @@ void main() {
     expect(node['hop-interval'], '30s');
   });
 
+  test('rejects provider-only entry to avoid silent network failure', () {
+    expect(
+      () => applyQuickChain(
+        source,
+        const QuickChain(
+          enabled: true,
+          entry: 'Provider-Only',
+          exit: 'US',
+        ),
+      ),
+      throwsFormatException,
+    );
+  });
+
+  test('rejects provider-only exit', () {
+    expect(
+      () => applyQuickChain(
+        source,
+        const QuickChain(
+          enabled: true,
+          entry: 'HK',
+          exit: 'Provider-Only',
+        ),
+      ),
+      throwsFormatException,
+    );
+  });
+
+  test('applies the chain after profile modifications and keeps other fields', () {
+    final profile = <String, dynamic>{
+      ...source,
+      'proxy-groups': [
+        {'name': 'Node Select', 'type': 'select', 'proxies': ['HK', 'US']},
+      ],
+      'rules': ['MATCH,Node Select'],
+    };
+    final result = applyQuickChain(
+      profile,
+      const QuickChain(enabled: true, entry: 'HK', exit: 'US'),
+    );
+    expect((result['rules'] as List).single, 'MATCH,Node Select');
+    expect((result['proxy-groups'] as List).length, 1);
+    expect(((result['proxies'] as List).last as Map)['dialer-proxy'], 'HK');
+  });
+
   test('disabled chain keeps the original config', () {
     expect(
       applyQuickChain(source, const QuickChain(entry: 'HK', exit: 'US')),

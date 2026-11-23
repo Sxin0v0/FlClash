@@ -160,10 +160,7 @@ Future<RealProfile> makeRealProfileTask(MakeRealProfileState data) async {
 }
 
 Future<RealProfile> _makeRealProfileTask(MakeRealProfileState data) async {
-  final rawConfig = applyQuickChain(
-    Map<String, dynamic>.from(data.rawConfig),
-    data.overrides.quickChain,
-  );
+  final rawConfig = Map<String, dynamic>.from(data.rawConfig);
   final realPatchConfig = data.realPatchConfig;
   final profilesPath = data.profilesPath;
   final profileId = data.profileId;
@@ -433,8 +430,9 @@ Future<RealProfile> _makeRealProfileTask(MakeRealProfileState data) async {
           ),
         );
   rawConfig['rules'] = [...mitmRules, ...rules];
-  final yaml = await _encodeYaml(Map<String, dynamic>.from(rawConfig));
-  return (yaml: yaml, md5: yaml.toMd5(), counts: configCountsOf(rawConfig));
+  final finalConfig = applyQuickChain(rawConfig, overrides.quickChain);
+  final yaml = await _encodeYaml(finalConfig);
+  return (yaml: yaml, md5: yaml.toMd5(), counts: configCountsOf(finalConfig));
 }
 
 typedef ShakingStoreArgs = ({
