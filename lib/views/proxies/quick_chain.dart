@@ -4,7 +4,7 @@ import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/providers/providers.dart';
 import 'package:fl_clash/ui/icons/icons.dart';
 import 'package:fl_clash/widgets/widgets.dart';
-import 'package:flutter/material.dart' show Material, MaterialType, ReorderableListView;
+import 'package:flutter/material.dart' show Material, MaterialType, ReorderableListView, ReorderableDragStartListener;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -220,103 +220,203 @@ class _QuickChainWorkspaceState extends ConsumerState<QuickChainWorkspace> {
   Widget _chainPane(List<Group> groups, bool connected) {
     final eligible = _eligibleGroups(groups);
     final picked = eligible.contains(_group) ? _group : eligible.firstOrNull;
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(children: [
-            Expanded(child: Text('代理链配置',
-                style: AppTextStyle.title2.of(context))),
-            TonalButton(label: '退出模式',
-                onPressed: _busy ? null : widget.onClose),
-          ]),
-          const SizedBox(height: 10),
-          Text('点击左侧节点逐个添加；按右侧拖动柄调整顺序。',
-              style: AppTextStyle.footnote.of(context)),
-          const SizedBox(height: 10),
-          if (_route.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(22),
-              child: Text('请从左侧依次点击入口、下一跳、出口。'),
+    final canConnect = _route.length >= 2 && picked != null && !_busy;
+    final entry = _route.isEmpty ? '请选择' : _route.first;
+    final exit = _route.length < 2 ? '请选择' : _route.last;
+    final path = _route.join(' → ');
+
+    return ListView(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        context.contentTopPadding + 12,
+        16,
+        20 + context.bottomInset,
+      ),
+      children: [
+        Row(
+          children: [
+            IconButton(
+              tooltip: '退出链式代理模式',
+              onPressed: _busy ? null : widget.onClose,
+              icon: const GlyphIcon(AppGlyphs.close),
             ),
-          if (_route.isNotEmpty)
+            const SizedBox(width: 8),
             Expanded(
-              child: Material(
-                type: MaterialType.transparency,
-                child: ReorderableListView.builder(
-                  itemCount: _route.length,
-                  onReorder: _reorder,
-                  itemBuilder: (context, i) {
-                    final name = _route[i];
-                    final role = i == 0 ? '入口' :
-                        (i == _route.length - 1 ? '出口' : '中继');
-                    return Card(
-                      key: ValueKey('chain-step-$name'),
-                      radius: AppCorner.lg,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 5),
-                      child: Row(children: [
-                        SizedBox(width: 40, child: Text(role,
-                            style: AppTextStyle.footnote.of(context))),
-                        Expanded(child: EmojiText(name,
-                            maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: AppTextStyle.subheadline.of(context))),
-                        IconButton(
-                          tooltip: '移除 $name',
-                          onPressed: _busy ? null : () =>
-                              setState(() => _route.removeAt(i)),
-                          icon: const GlyphIcon(AppGlyphs.delete),
-                        ),
-                        const SizedBox(width: 40),
-                      ]),
-                    );
-                  },
-                ),
+              child: Text(
+                '快捷链式代理',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyle.title2.of(context),
               ),
             ),
-          if (_route.isEmpty) const Spacer(),
-          if (_route.isNotEmpty) Text(
-            '连接顺序：${_route.join(' → ')}',
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          connected ? '已启用：$path' : '点击左侧节点按顺序添加',
+          style: AppTextStyle.subheadline.of(context),
+        ),
+        const SizedBox(height: 18),
+        generateSection(
+          items: [
+            ListItem.toggle(
+              title: const Text('启用链式代理'),
+              value: connected,
+              onChanged: _busy || (!connected && !canConnect)
+                  ? null
+                  : (enabled) {
+                      if (enabled) {
+                        _connect();
+                      } else {
+                        _disconnect();
+                      }
+                    },
+            ),
+            ListItem(
+              title: const Text('入口节点（前置）'),
+              subtitle: Text(entry, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+            ListItem(
+              title: const Text('出口节点（落地）'),
+              subtitle: Text(exit, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+            if (eligible.isNotEmpty)
+              ListItem<String?>.options(
+                title: const Text('应用到策略组'),
+                options: <String?>[null, ...eligible],
+                value: picked,
+                textBuilder: (name) => name ?? '请选择',
+                onChanged: (name) => setState(() => _group = name),
+              )
+            else
+              const ListItem(
+                title: Text('应用到策略组'),
+                subtitle: Text('尚未找到包含出口的策略组'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Text(
+          '点击左侧节点继续添加；拖动排序图标可调整顺序。',
+          style: AppTextStyle.footnote.of(context),
+        ),
+        const SizedBox(height: 10),
+        if (_route.isEmpty)
+          generateSection(
+            items: [
+              const ListItem(
+                title: Text('尚未添加节点'),
+                subtitle: Text('先选入口、再选出口；也可继续增加中继。'),
+              ),
+            ],
+          )
+        else
+          Material(
+            type: MaterialType.transparency,
+            child: ReorderableListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              buildDefaultDragHandles: false,
+              itemCount: _route.length,
+              onReorder: _reorder,
+              itemBuilder: (context, index) {
+                final name = _route[index];
+                final role = index == 0
+                    ? '入口'
+                    : index == _route.length - 1
+                        ? '出口'
+                        : '中继';
+                return Padding(
+                  key: ValueKey('chain-step-$name'),
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Card(
+                    radius: AppCorner.lg,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 7,
+                    ),
+                    child: Row(
+                      children: [
+                        ReorderableDragStartListener(
+                          index: index,
+                          enabled: !_busy,
+                          child: const Padding(
+                            padding: EdgeInsets.only(right: 10),
+                            child: GlyphIcon(AppGlyphs.dragHandle),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 40,
+                          child: Text(
+                            role,
+                            style: AppTextStyle.footnote.of(context),
+                          ),
+                        ),
+                        Expanded(
+                          child: EmojiText(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyle.subheadline.of(context),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: '移除 $name',
+                          onPressed: _busy
+                              ? null
+                              : () => setState(() => _route.removeAt(index)),
+                          icon: const GlyphIcon(AppGlyphs.delete),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        if (_route.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(
+            '连接路径：Windows → $path → 目标网站',
             style: AppTextStyle.footnote.of(context),
           ),
+        ],
+        if (_message != null) ...[
           const SizedBox(height: 10),
-          if (eligible.isNotEmpty)
-            ListItem<String?>.options(
-              title: const Text('应用到策略组'),
-              options: <String?>[null, ...eligible],
-              value: picked,
-              textBuilder: (value) => value ?? '请选择',
-              onChanged: (value) => setState(() => _group = value),
-            ),
-          if (_message != null) Padding(
-            padding: const EdgeInsets.symmetric(vertical: 7),
-            child: Text(_message!, style: AppTextStyle.footnote.of(context)),
-          ),
+          Text(_message!, style: AppTextStyle.footnote.of(context)),
+        ],
+        const SizedBox(height: 20),
+        TonalButton(
+          glyph: AppGlyphs.link,
+          label: _busy
+              ? '正在验证连接…'
+              : connected
+                  ? '更新链路并验证'
+                  : '连接并验证',
+          onPressed: canConnect ? _connect : null,
+        ),
+        if (connected) ...[
           const SizedBox(height: 10),
           TonalButton(
             glyph: AppGlyphs.link,
-            label: _busy ? '正在验证…' :
-                (connected ? '更新链路并验证' : '连接并验证'),
-            onPressed: _busy || _route.length < 2 || picked == null
-                ? null : _connect,
-          ),
-          if (connected) ...[
-            const SizedBox(height: 8),
-            TonalButton(
-              glyph: AppGlyphs.link,
-              label: '断开链式代理',
-              onPressed: _busy ? null : _disconnect,
-            ),
-          ],
-          const SizedBox(height: 8),
-          TonalButton(
-            glyph: AppGlyphs.delete,
-            label: '清空链路',
-            onPressed: _busy ? null : () => setState(() => _route.clear()),
+            label: '断开链式代理',
+            onPressed: _busy ? null : _disconnect,
           ),
         ],
-      ),
+        const SizedBox(height: 10),
+        TonalButton(
+          glyph: AppGlyphs.delete,
+          label: '清空待编辑链路',
+          onPressed: _busy || _route.isEmpty
+              ? null
+              : () => setState(() => _route.clear()),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          '规则模式仅影响所选策略组的连接，节点需要来自订阅 proxies 内联列表。',
+          style: AppTextStyle.footnote.of(context),
+        ),
+      ],
     );
   }
 
@@ -325,34 +425,22 @@ class _QuickChainWorkspaceState extends ConsumerState<QuickChainWorkspace> {
     final profile = ref.watch(profileProvider(widget.profileId));
     final groups = ref.watch(groupsProvider);
     final connected = profile?.overrides.quickChain.enabled == true;
-    // Keep the original proxy grid and group cards at their original sizes.
-    // This pane *covers* the right half, like the existing groups in list mode.
-    // The original cards receive chain taps instead of selecting a proxy.
-    return LayoutBuilder(
-      builder: (context, size) {
-        final panelWidth = size.maxWidth >= 760
-            ? size.maxWidth * 0.51
-            : size.maxWidth * 0.80;
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: widget.style == ProxiesType.tab
-                  ? ProxiesTabView(onChainNodeTap: _append)
-                  : ProxiesListView(onChainNodeTap: _append),
-            ),
-            Positioned(
-              top: 0,
-              bottom: 0,
-              right: 0,
-              width: panelWidth,
-              child: ColoredBox(
-                color: context.colorScheme.surface,
-                child: _chainPane(groups, connected),
-              ),
-            ),
-          ],
-        );
-      },
+    // Both panes receive exactly half the available width.
+    // No resizing of the native Windows window.
+    return Row(
+      children: [
+        Expanded(
+          child: widget.style == ProxiesType.tab
+              ? ProxiesTabView(onChainNodeTap: _append)
+              : ProxiesListView(onChainNodeTap: _append),
+        ),
+        Expanded(
+          child: ColoredBox(
+            color: context.colorScheme.surface,
+            child: _chainPane(groups, connected),
+          ),
+        ),
+      ],
     );
   }
 }
