@@ -98,6 +98,9 @@ ProfileOverrides profileOverrides(Ref ref, int? profileId) {
               ),
               tun: state.tunOverride,
               tunOverrideKeys: state.tunOverrideKeys,
+              // Normal subscriptions keep only app-wide overrides, except
+              // the per-profile chain that must reach the runtime config.
+              quickChain: profile?.overrides.quickChain ?? const QuickChain(),
             ),
           ),
         );

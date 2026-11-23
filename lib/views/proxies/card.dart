@@ -46,6 +46,7 @@ class ProxyCard extends ConsumerWidget {
   final GroupType groupType;
   final ProxyCardType type;
   final String? testUrl;
+  final ValueChanged<Proxy>? onChainNodeTap;
 
   const ProxyCard({
     super.key,
@@ -54,6 +55,7 @@ class ProxyCard extends ConsumerWidget {
     required this.proxy,
     required this.groupType,
     required this.type,
+    this.onChainNodeTap,
   });
 
   Measure get measure => globalState.measure;
@@ -201,7 +203,9 @@ class ProxyCard extends ConsumerWidget {
             radius: AppCorner.lg,
             enterActionsOnRight: true,
             key: key,
-            onPressed: () => _handleSelect(ref),
+            onPressed: onChainNodeTap == null
+                ? () => _handleSelect(ref)
+                : () => onChainNodeTap!(proxy),
             isSelected: inUse,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Column(

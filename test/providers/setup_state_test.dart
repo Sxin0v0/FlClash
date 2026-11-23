@@ -22,6 +22,59 @@ void main() {
     await testDatabase.close();
   });
 
+  testWidgets('subscription chain reaches setup state and follows profile updates', (
+    tester,
+  ) async {
+    const old = Profile(
+      id: 81,
+      type: ProfileType.url,
+      url: 'https://example.com/sub',
+      autoUpdateDuration: Duration.zero,
+      overrides: ProfileOverrides(
+        quickChain: QuickChain(
+          enabled: true,
+          entry: 'HK',
+          exit: 'US',
+          group: 'SELECT',
+        ),
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        profilesProvider.overrideWith(() => TestProfiles([old])),
+      ],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const SizedBox.shrink(),
+      ),
+    );
+    final first = await container.read(setupStateProvider(old.id).future);
+    expect(first.overrides.quickChain.enabled, isTrue);
+    expect(first.overrides.quickChain.entry, 'HK');
+    expect(first.overrides.quickChain.exit, 'US');
+
+    container.read(profilesProvider.notifier).updateProfile(
+      old.id,
+      (profile) => profile.copyWith(
+        overrides: profile.overrides.copyWith(
+          quickChain: const QuickChain(
+            enabled: true,
+            entry: 'JP',
+            exit: 'US',
+            group: 'SELECT',
+          ),
+        ),
+      ),
+    );
+    // The provider watches the profile itself, so changing the chain must
+    // invalidate the setup state that the Core uses.
+    final next = await container.read(setupStateProvider(old.id).future);
+    expect(next.overrides.quickChain.entry, 'JP');
+  });
+
   testWidgets('a custom setup disposed before its queries return resolves', (
     tester,
   ) async {

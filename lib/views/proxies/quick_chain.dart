@@ -8,9 +8,13 @@ import 'package:flutter/material.dart' show Material, MaterialType, ReorderableL
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'list.dart';
+import 'tab.dart';
+
 class QuickChainWorkspace extends ConsumerStatefulWidget {
-  const QuickChainWorkspace({super.key, required this.profileId, required this.onClose});
+  const QuickChainWorkspace({super.key, required this.profileId, required this.style, required this.onClose});
   final int profileId;
+  final ProxiesType style;
   final VoidCallback onClose;
   @override
   ConsumerState<QuickChainWorkspace> createState() => _QuickChainWorkspaceState();
@@ -145,6 +149,21 @@ class _QuickChainWorkspaceState extends ConsumerState<QuickChainWorkspace> {
       if (!await ref.read(setupActionProvider.notifier).applyProfile(force: true)) {
         throw StateError('内核没有接受链式代理配置');
       }
+      // Verify the LIVE Mihomo configuration, not just the UI flag.
+      // Before this check the missing profile-overrides propagation made a
+      // perfectly healthy single-hop exit appear to be a successful chain.
+      for (var index = 1; index < _route.length; index++) {
+        final hop = _route[index];
+        final preceding = _route[index - 1];
+        final runtime = await ref.read(coreHandlerProvider)
+            .getProxyDefinition(hop);
+        if (runtime?['dialer-proxy'] != preceding) {
+          throw StateError(
+            '内核配置未生效：$hop 的 dialer-proxy 应为 $preceding，'
+            '实际为 ${runtime?['dialer-proxy']}',
+          );
+        }
+      }
       final changed = await ref.read(coreHandlerProvider).changeProxy(
         ChangeProxyParams(groupName: target, proxyName: exit));
       if (changed.message.isNotEmpty) throw StateError(changed.message);
@@ -197,85 +216,6 @@ class _QuickChainWorkspaceState extends ConsumerState<QuickChainWorkspace> {
     } catch (error) {
       await _rollback(before, '断开链式代理失败：$error');
     }
-  }
-
-  Widget _nodeCard(Proxy node) {
-    final selected = _route.contains(node.name);
-    final usable = _allowed(node) && node.providerName == null;
-    return Card(
-      key: ValueKey('chain-node-${node.name}'),
-      radius: AppCorner.lg,
-      isSelected: selected,
-      onPressed: !_busy && usable ? () => _append(node) : null,
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: EmojiText(node.name, maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyle.subheadline.of(context)),
-          ),
-          Text(
-            node.providerName == null ? node.type : 'Provider（暂不支持）',
-            maxLines: 1, overflow: TextOverflow.ellipsis,
-            style: AppTextStyle.footnote.of(context),
-          ),
-          if (selected)
-            Text('第 ${_route.indexOf(node.name) + 1} 跳 ✓',
-                style: AppTextStyle.footnote.of(context)),
-        ],
-      ),
-    );
-  }
-
-  Widget _nodePane(List<Group> groups) {
-    final available = groups.where((g) => g.all.isNotEmpty).toList();
-    if (available.isEmpty) return const Center(child: Text('未找到代理节点'));
-    final current = available.any((g) => g.name == _browseGroup)
-        ? _browseGroup! : available.first.name;
-    final group = available.firstWhere((g) => g.name == current);
-    final nodes = group.all.where(_allowed).toList();
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Text('点击节点，按顺序添加到链路',
-              style: AppTextStyle.title3.of(context)),
-        ),
-        SizedBox(
-          height: 43,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: [
-              for (final g in available)
-                Padding(
-                  padding: const EdgeInsets.only(right: 7),
-                  child: TonalButton(
-                    label: g.name,
-                    onPressed: () => setState(() => _browseGroup = g.name),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: LayoutBuilder(builder: (context, size) {
-            return GridView.builder(
-              padding: const EdgeInsets.all(12),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: size.maxWidth >= 520 ? 3 : 2,
-                mainAxisSpacing: 9,
-                crossAxisSpacing: 9,
-                mainAxisExtent: 104,
-              ),
-              itemCount: nodes.length,
-              itemBuilder: (context, i) => _nodeCard(nodes[i]),
-            );
-          }),
-        ),
-      ],
-    );
   }
 
   Widget _chainPane(List<Group> groups, bool connected) {
@@ -386,21 +326,33 @@ class _QuickChainWorkspaceState extends ConsumerState<QuickChainWorkspace> {
     final profile = ref.watch(profileProvider(widget.profileId));
     final groups = ref.watch(groupsProvider);
     final connected = profile?.overrides.quickChain.enabled == true;
+    // Keep the original proxy grid and group cards at their original sizes.
+    // This pane *covers* the right half, like the existing groups in list mode.
+    // The original cards receive chain taps instead of selecting a proxy.
     return LayoutBuilder(
       builder: (context, size) {
-        if (size.maxWidth < 760) {
-          return Column(children: [
-            Expanded(child: _nodePane(groups)),
-            SizedBox(height: 365, child: _chainPane(groups, connected)),
-          ]);
-        }
-        return Row(children: [
-          Expanded(child: _nodePane(groups)),
-          SizedBox(
-            width: size.maxWidth >= 1100 ? 430 : 370,
-            child: _chainPane(groups, connected),
-          ),
-        ]);
+        final panelWidth = size.maxWidth >= 760
+            ? size.maxWidth * 0.51
+            : size.maxWidth * 0.80;
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: widget.style == ProxiesType.tab
+                  ? ProxiesTabView(onChainNodeTap: _append)
+                  : ProxiesListView(onChainNodeTap: _append),
+            ),
+            Positioned(
+              top: 0,
+              bottom: 0,
+              right: 0,
+              width: panelWidth,
+              child: ColoredBox(
+                color: context.colorScheme.surface,
+                child: _chainPane(groups, connected),
+              ),
+            ),
+          ],
+        );
       },
     );
   }

@@ -14,7 +14,9 @@ import 'common.dart';
 import 'group_tabs.dart';
 
 class ProxiesTabView extends ConsumerStatefulWidget {
-  const ProxiesTabView({super.key});
+  const ProxiesTabView({super.key, this.onChainNodeTap});
+
+  final ValueChanged<Proxy>? onChainNodeTap;
 
   static Map<String, PageStorageKey> pageListStoreMap = {};
 
@@ -213,6 +215,7 @@ class ProxiesTabViewState extends ConsumerState<ProxiesTabView>
                                 group: group,
                                 columns: columns,
                                 cardType: cardType,
+                                onChainNodeTap: widget.onChainNodeTap,
                               ),
                           ],
                         );
@@ -231,6 +234,7 @@ class ProxyGroupView extends ConsumerWidget {
   final ScrollController controller;
   final int columns;
   final ProxyCardType cardType;
+  final ValueChanged<Proxy>? onChainNodeTap;
 
   const ProxyGroupView({
     super.key,
@@ -238,6 +242,7 @@ class ProxyGroupView extends ConsumerWidget {
     required this.controller,
     required this.columns,
     required this.cardType,
+    this.onChainNodeTap,
   });
 
   PageStorageKey _getPageStorageKey(WidgetRef ref) {
@@ -280,6 +285,7 @@ class ProxyGroupView extends ConsumerWidget {
             type: cardType,
             proxy: proxy,
             groupName: group.name,
+            onChainNodeTap: onChainNodeTap,
           );
         },
       ),

@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
@@ -9,7 +7,6 @@ import 'package:fl_clash/views/proxies/list.dart';
 import 'package:fl_clash/widgets/widgets.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:rust_api/window.dart';
 
 import 'quick_chain.dart';
 import 'tab.dart';
@@ -33,51 +30,13 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
   late final _tabView = ProxiesTabView(key: _proxiesTabKey);
   bool _isTab = false;
   bool _chainMode = false;
-  Size? _originalWindowSize;
-
-  Future<void> _enterChainMode() async {
-    if (_chainMode || widget.picker) return;
-    setState(() => _chainMode = true);
-    if (!system.isWindows) return;
-    try {
-      final before = (await desktopWindow.getBounds()).size;
-      final screen = await desktopWindow.getPrimaryDisplay();
-      final available = screen?.workArea.size ?? const Size(1280, 850);
-      final target = Size(
-        math.min(1190, available.width * .96),
-        math.min(790, available.height * .95),
-      );
-      if (target.width > before.width || target.height > before.height) {
-        _originalWindowSize = before;
-        await desktopWindow.setSize(Size(
-          math.max(before.width, target.width),
-          math.max(before.height, target.height),
-        ));
-      }
-    } catch (_) {
-      // The inline workspace still works on platforms that deny resizing.
-    }
+  // The original proxy layout stays mounted. Only the right side is covered.
+  void _enterChainMode() {
+    if (!widget.picker) setState(() => _chainMode = true);
   }
 
-  Future<void> _leaveChainMode() async {
-    if (!_chainMode) return;
+  void _leaveChainMode() {
     setState(() => _chainMode = false);
-    final before = _originalWindowSize;
-    _originalWindowSize = null;
-    if (before != null) {
-      try {
-        await desktopWindow.setSize(before);
-      } catch (_) {}
-    }
-  }
-
-  @override
-  void dispose() {
-    final before = _originalWindowSize;
-    if (before != null) {
-      desktopWindow.setSize(before);
-    }
-    super.dispose();
   }
 
   void _updateStyle(
@@ -233,11 +192,12 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
           ),
       ],
       menuItems: picker ? const [] : _buildMenuItems(context, style),
-      title: _chainMode ? '链式代理模式' : context.appLocalizations.proxies,
+      title: context.appLocalizations.proxies,
       searchState: AppBarSearchState(onSearch: _onSearch),
       body: _chainMode && ref.watch(currentProfileIdProvider) != null
           ? QuickChainWorkspace(
               profileId: ref.watch(currentProfileIdProvider)!,
+              style: style.type,
               onClose: _leaveChainMode,
             )
           : switch (style.type) {

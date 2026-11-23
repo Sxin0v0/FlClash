@@ -21,7 +21,9 @@ const _groupMaxColumns = 3;
 const _lastRowGrowth = _headerInset - proxyGridSpacing;
 
 class ProxiesListView extends ConsumerStatefulWidget {
-  const ProxiesListView({super.key});
+  const ProxiesListView({super.key, this.onChainNodeTap});
+
+  final ValueChanged<Proxy>? onChainNodeTap;
 
   @override
   ConsumerState<ProxiesListView> createState() => _ProxiesListViewState();
@@ -210,6 +212,7 @@ class _ProxiesListViewState extends ConsumerState<ProxiesListView> {
                 gap: gap,
                 onChange: _handleChange,
                 onScrollToSelected: _scrollToGroupSelected,
+                onChainNodeTap: widget.onChainNodeTap,
               );
               return Scrollbar(
                 controller: _controller,
@@ -291,6 +294,7 @@ class _GroupSliver extends ConsumerStatefulWidget {
     required this.gap,
     required this.onChange,
     required this.onScrollToSelected,
+    this.onChainNodeTap,
   });
 
   final Group group;
@@ -299,6 +303,7 @@ class _GroupSliver extends ConsumerStatefulWidget {
   final double gap;
   final void Function(String groupName) onChange;
   final void Function(String groupName) onScrollToSelected;
+  final ValueChanged<Proxy>? onChainNodeTap;
 
   @override
   ConsumerState<_GroupSliver> createState() => _GroupSliverState();
@@ -343,7 +348,8 @@ class _GroupSliverState extends ConsumerState<_GroupSliver>
     super.didUpdateWidget(oldWidget);
     if (widget.group != oldWidget.group ||
         widget.columns != oldWidget.columns ||
-        widget.cardType != oldWidget.cardType) {
+        widget.cardType != oldWidget.cardType ||
+        widget.onChainNodeTap != oldWidget.onChainNodeTap) {
       _rows = null;
     }
   }
@@ -364,6 +370,7 @@ class _GroupSliverState extends ConsumerState<_GroupSliver>
                 key: ValueKey('$groupName.${proxy.name}'),
                 proxy: proxy,
                 groupName: groupName,
+                onChainNodeTap: widget.onChainNodeTap,
               ),
             ),
           ),
