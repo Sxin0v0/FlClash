@@ -18,6 +18,7 @@ class QuickChainSheet extends ConsumerStatefulWidget {
 
 class _QuickChainSheetState extends ConsumerState<QuickChainSheet> {
   String? _entry;
+  List<String> _hops = [];
   String? _exit;
   String? _group;
   bool _enabled = false;
@@ -29,6 +30,7 @@ class _QuickChainSheetState extends ConsumerState<QuickChainSheet> {
     final stored =
         ref.read(profileProvider(widget.profileId))?.overrides.quickChain;
     _entry = stored?.entry.isNotEmpty == true ? stored!.entry : null;
+    _hops = [...?stored?.hops];
     _exit = stored?.exit.isNotEmpty == true ? stored!.exit : null;
     _group = stored?.group.isNotEmpty == true ? stored!.group : null;
     _enabled = stored?.enabled ?? false;
@@ -43,6 +45,7 @@ class _QuickChainSheetState extends ConsumerState<QuickChainSheet> {
       return;
     }
     final entry = _entry;
+    final hops = List<String>.from(_hops);
     final exit = _exit;
     final group = _group;
     final enabled = _enabled;
@@ -50,6 +53,7 @@ class _QuickChainSheetState extends ConsumerState<QuickChainSheet> {
         (entry == null ||
             exit == null ||
             entry == exit ||
+            <String>{entry, ...hops, exit}.length != hops.length + 2 ||
             group == null)) {
       return;
     }
@@ -80,6 +84,7 @@ class _QuickChainSheetState extends ConsumerState<QuickChainSheet> {
           quickChain: QuickChain(
             enabled: enabled,
             entry: entry ?? '',
+            hops: hops,
             exit: exit ?? '',
             group: group ?? '',
             previousSelection: previousSelection,
@@ -174,16 +179,19 @@ class _QuickChainSheetState extends ConsumerState<QuickChainSheet> {
             group.all.any((node) => node.name == _exit))
           group.name,
     ];
+    final route = <String?>[_entry, ..._hops, _exit];
     final valid = !_enabled ||
         (_entry != null &&
             _exit != null &&
             _entry != _exit &&
             entries.contains(_entry) &&
             exits.contains(_exit) &&
+            _hops.every(exits.contains) &&
+            route.toSet().length == route.length &&
             eligibleGroups.contains(_group));
     final saved = profile?.overrides.quickChain;
     final summary = saved?.enabled == true
-        ? '已配置: ${saved!.entry} → ${saved.exit}'
+        ? '已配置: ${[saved!.entry, ...saved.hops, saved.exit].join(' → ')}'
         : '未启用';
 
     return Scaffold(
@@ -219,6 +227,20 @@ class _QuickChainSheetState extends ConsumerState<QuickChainSheet> {
                 textBuilder: (name) => name ?? '请选择',
                 onChanged: (name) => setState(() => _entry = name),
               ),
+              for (var index = 0; index < _hops.length; index++)
+                ListItem<String?>.options(
+                  title: Text('第 ${index + 2} 跳（中继，可清空移除）'),
+                  options: <String?>[null, ...exits],
+                  value: exits.contains(_hops[index]) ? _hops[index] : null,
+                  textBuilder: (name) => name ?? '移除这一跳',
+                  onChanged: (name) => setState(() {
+                    if (name == null) {
+                      _hops.removeAt(index);
+                    } else {
+                      _hops[index] = name;
+                    }
+                  }),
+                ),
               ListItem<String?>.options(
                 title: const Text('出口节点（落地）'),
                 options: <String?>[null, ...exits],
@@ -239,13 +261,32 @@ class _QuickChainSheetState extends ConsumerState<QuickChainSheet> {
             ],
           ),
           const SizedBox(height: 14),
+          TonalButton(
+            glyph: AppGlyphs.add,
+            label: '增加中继节点（按添加顺序连接）',
+            onPressed: _saving || _hops.length >= 6
+                ? null
+                : () => setState(() {
+                    final candidates = exits.where(
+                      (name) => name != _entry &&
+                          name != _exit &&
+                          !_hops.contains(name),
+                    );
+                    if (candidates.isNotEmpty) _hops.add(candidates.first);
+                  }),
+          ),
+          const SizedBox(height: 14),
           Text(
-            '连接路径: Windows → 入口 → 出口 → 目标网站',
+            '连接路径: Windows → ${[
+              if (_entry != null) _entry!,
+              ..._hops,
+              if (_exit != null) _exit!,
+            ].join(' → ')} → 目标网站',
             style: AppTextStyle.footnote.of(context),
           ),
           const SizedBox(height: 8),
           Text(
-            '规则模式仅影响命中所选策略组的连接。出口仅支持订阅中 proxies 直接声明的节点；proxy-providers 提供的节点暂不支持作出口。',
+            '规则模式仅影响命中所选策略组的连接。首跳可来自 proxy-providers；中继和出口节点必须是 proxies 内联节点。节点顺序按添加顺序排列。',
             style: AppTextStyle.footnote.of(context),
           ),
           const SizedBox(height: 20),

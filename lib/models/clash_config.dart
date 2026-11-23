@@ -1644,6 +1644,7 @@ abstract class QuickChain with _$QuickChain {
   const factory QuickChain({
     @Default(false) bool enabled,
     @Default('') String entry,
+    @Default(<String>[]) List<String> hops,
     @Default('') String exit,
     @Default('') String group,
     @Default('') String previousSelection,

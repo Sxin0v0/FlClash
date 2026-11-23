@@ -11,12 +11,11 @@ permissions:
 
 concurrency:
   group: quick-chain-windows-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   FLUTTER_VERSION: '3.50.0'
   GO_VERSION: '1.27.1'
-  RELEASE_TAG: v0.9.4-quickchain.${{ github.run_number }}
 
 jobs:
   windows:
@@ -73,6 +72,15 @@ jobs:
           flutter pub get
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Choose tag from current upstream version
+        shell: pwsh
+        run: |
+          $match = (Get-Content pubspec.yaml | Select-String '^version:\s*(\d+\.\d+\.\d+)').Matches
+          if (-not $match) { throw 'Cannot read version from pubspec.yaml' }
+          $baseVersion = $match[0].Groups[1].Value
+          $tag = "v$baseVersion-quickchain.${{ github.run_number }}"
+          "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Generate Freezed, JSON and Riverpod sources
         shell: pwsh
         run: |
@@ -94,7 +102,7 @@ jobs:
       - name: Build Windows installer and portable bundle
         shell: pwsh
         run: |
-          dart tool/package.dart windows --env dev --tag "$env:RELEASE_TAG" -v
+          dart tool/package.dart windows --env stable --tag "$env:RELEASE_TAG" -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify installer, portable ZIP, and hashes
@@ -128,7 +136,7 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: FlClash Quick Chain ${{ env.RELEASE_TAG }} (unofficial)
           body: |
-            Unofficial Windows x64 FlClash build with a quick two-hop proxy chain GUI.
+            Unofficial Windows x64 FlClash stable-channel build with a multi-hop proxy chain GUI. Upstream Hysteria2 port hopping (ports / hop-interval) remains available.
             Download the setup EXE for installation or the portable ZIP for a self-contained runner.
             Back up your existing FlClash data. This fork uses the same Windows app identity as upstream.
             Unsigned community binaries may trigger Windows SmartScreen.

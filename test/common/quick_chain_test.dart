@@ -22,6 +22,28 @@ void main() {
     expect(((source['proxies'] as List)[1] as Map)['dialer-proxy'], isNull);
   });
 
+  test('preserves Hysteria2 port hopping when applying a chain', () {
+    final config = <String, dynamic>{
+      'proxies': [
+        {'name': 'HK', 'type': 'socks5'},
+        {
+          'name': 'HY2',
+          'type': 'hysteria2',
+          'ports': '20000-20010',
+          'hop-interval': '30s',
+        },
+      ],
+    };
+    final output = applyQuickChain(
+      config,
+      const QuickChain(enabled: true, entry: 'HK', exit: 'HY2'),
+    );
+    final node = (output['proxies'] as List)[1] as Map;
+    expect(node['dialer-proxy'], 'HK');
+    expect(node['ports'], '20000-20010');
+    expect(node['hop-interval'], '30s');
+  });
+
   test('disabled chain keeps the original config', () {
     expect(
       applyQuickChain(source, const QuickChain(entry: 'HK', exit: 'US')),
