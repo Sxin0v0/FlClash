@@ -358,10 +358,18 @@ class _QuickChainWorkspaceState extends ConsumerState<QuickChainWorkspace> {
           TonalButton(
             glyph: AppGlyphs.link,
             label: _busy ? '正在验证…' :
-                (connected ? '断开链式代理' : '连接并验证'),
-            onPressed: _busy ? null : connected ? _disconnect :
-                (_route.length >= 2 && picked != null ? _connect : null),
+                (connected ? '更新链路并验证' : '连接并验证'),
+            onPressed: _busy || _route.length < 2 || picked == null
+                ? null : _connect,
           ),
+          if (connected) ...[
+            const SizedBox(height: 8),
+            TonalButton(
+              glyph: AppGlyphs.link,
+              label: '断开链式代理',
+              onPressed: _busy ? null : _disconnect,
+            ),
+          ],
           const SizedBox(height: 8),
           TonalButton(
             glyph: AppGlyphs.delete,
