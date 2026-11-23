@@ -23,7 +23,6 @@ class QuickChainWorkspace extends ConsumerStatefulWidget {
 class _QuickChainWorkspaceState extends ConsumerState<QuickChainWorkspace> {
   List<String> _route = [];
   String? _group;
-  String? _browseGroup;
   bool _busy = false;
   String? _message;
 

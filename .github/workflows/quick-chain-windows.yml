@@ -87,6 +87,12 @@ jobs:
           dart run build_runner build --delete-conflicting-outputs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Format Dart sources
+        shell: pwsh
+        run: |
+          dart format lib test tool plugins
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Static analysis
         shell: pwsh
         run: |

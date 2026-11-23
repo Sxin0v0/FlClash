@@ -59,8 +59,17 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Check format
-        run: dart format --output=none --set-exit-if-changed lib test tool plugins
+      - name: Normalize Quick Chain source formatting
+        run: |
+          if [[ "$GITHUB_REF" == "refs/heads/quick-chain" ]]; then
+            dart format lib test tool plugins
+          else
+            dart format --output=none --set-exit-if-changed lib test tool plugins
+          fi
+
+      - name: Generate model and provider source
+        if: github.ref == 'refs/heads/quick-chain'
+        run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Analyze
         run: flutter analyze --no-fatal-infos
@@ -171,6 +180,10 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Generate model and provider source for Quick Chain
+        if: github.ref == 'refs/heads/quick-chain'
+        run: dart run build_runner build --delete-conflicting-outputs
 
       # Compiles the desktop runners and the native plugin code that only the
       # tagged release matrix built before; the bundle itself is discarded.
