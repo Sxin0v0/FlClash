@@ -57,13 +57,19 @@ jobs:
             echo "updated=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build release for new upstream commit
-        if: steps.merge.outputs.updated == 'true'
+      - name: Recover missing Windows build for latest custom commit
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # GitHub intentionally ignores workflow pushes by GITHUB_TOKEN.
-          # Explicit workflow_dispatch ensures the new commit gets built.
-          gh workflow run quick-chain-windows.yml --repo ${{ github.repository }} --ref quick-chain
-          echo "Triggered Windows build for updated Quick Chain."
+          set -euo pipefail
+          # A GitHub App/Actions commit can update the branch without creating
+          # a push-triggered run. Detect that gap and dispatch explicitly.
+          head_sha=$(git rev-parse quick-chain)
+          runs=$(gh api "repos/${{ github.repository }}/actions/workflows/quick-chain-windows.yml/runs?branch=quick-chain&per_page=50" --jq '.workflow_runs[].head_sha')
+          if grep -Fqx "$head_sha" <<< "$runs"; then
+            echo "A Windows workflow run already exists for $head_sha."
+          else
+            gh workflow run quick-chain-windows.yml --repo "${{ github.repository }}" --ref quick-chain
+            echo "Triggered missing Windows build for $head_sha."
+          fi
