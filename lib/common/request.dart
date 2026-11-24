@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:fl_clash/common/common.dart';
+import 'package:fl_clash/common/quick_chain_update.dart';
 import 'package:fl_clash/common/release_asset.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/plugins/app.dart';
@@ -105,44 +106,28 @@ class Request {
     }
   }
 
-  /// Null when this build is current; throws when GitHub cannot be asked.
+  /// Null when this custom build is current; never offer an upstream binary.
   Future<Map<String, dynamic>?> checkForUpdate() async {
     final release = await latestRelease();
     final remoteVersion = release['tag_name'] as String;
-    final version = globalState.packageInfo.version;
-    final hasUpdate =
-        compareVersions(remoteVersion.replaceAll('v', ''), version) > 0;
-    return hasUpdate ? release : null;
+    final version = currentQuickChainVersion(globalState.packageInfo.version);
+    return compareQuickChainVersions(remoteVersion, version) > 0
+        ? release
+        : null;
   }
 
-  /// The release page redirect still answers once the hourly API quota is spent.
+  /// GitHub's /releases/latest excludes Quick Chain prereleases.
   Future<Map<String, dynamic>> latestRelease() async {
-    try {
-      final response = await dio.get<Map<String, dynamic>>(
-        'https://api.github.com/repos/$repository/releases/latest',
-        options: Options(responseType: ResponseType.json),
-      );
-      return response.data!;
-    } on DioException catch (error) {
-      commonPrint.log(
-        'latest release API failed: ${compactError(error)}',
-        logLevel: LogLevel.warning,
-      );
-    }
-    final response = await dio.get<void>(
-      'https://github.com/$repository/releases/latest',
-      options: Options(
-        followRedirects: false,
-        validateStatus: (status) => status != null && status < 400,
-      ),
+    final response = await dio.get<List<dynamic>>(
+      'https://api.github.com/repos/$repository/releases',
+      queryParameters: {'per_page': 100},
+      options: Options(responseType: ResponseType.json),
     );
-    final location = response.headers.value(HttpHeaders.locationHeader);
-    final segments = Uri.tryParse(location ?? '')?.pathSegments ?? const [];
-    final tagIndex = segments.indexOf('tag') + 1;
-    if (tagIndex == 0 || tagIndex >= segments.length) {
-      throw FormatException('No release tag in the redirect', location);
+    final release = newestQuickChainRelease(response.data ?? const []);
+    if (release == null) {
+      throw StateError('No complete Quick Chain Windows release found');
     }
-    return {'tag_name': segments[tagIndex]};
+    return release;
   }
 
   Future<String> downloadVerifiedRelease({

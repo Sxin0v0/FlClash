@@ -162,7 +162,10 @@ List<Step> planBuild(
     Task('write env.json with APP_ENV=$env', () async {
       File(
         context.path('env.json'),
-      ).writeAsStringSync(jsonEncode({'APP_ENV': env}));
+      ).writeAsStringSync(jsonEncode({
+        'APP_ENV': env,
+        'APP_RELEASE_VERSION': context.version,
+      }));
     }),
     Task('install the packaging tools ${context.os.name} is missing', () {
       return ensurePackagingTools(context.os, context.arch);

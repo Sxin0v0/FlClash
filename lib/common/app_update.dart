@@ -46,7 +46,7 @@ Future<bool> Function(Uri uri) launchReleasePage = launchUrl;
 
 Future<bool> openReleasePage() {
   return launchReleasePage(
-    Uri.https('github.com', '/$repository/releases/latest'),
+    Uri.https('github.com', '/$repository/releases'),
   );
 }
 

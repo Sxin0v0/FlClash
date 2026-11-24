@@ -92,53 +92,56 @@ void main() {
   });
 
   group('latestRelease', () {
+    Map<String, dynamic> release(String tag, {bool complete = true}) {
+      final version = releaseVersionOfTag(tag);
+      return {
+        'tag_name': tag,
+        'body': 'notes',
+        'draft': false,
+        'prerelease': true,
+        'assets': [
+          {'name': 'FlClash-$version-windows-amd64-setup.exe'},
+          if (complete) {'name': 'FlClash-$version-windows-amd64-portable.zip'},
+          {'name': updateChecksumsName(tag)},
+        ],
+      };
+    }
+
     Request requestAnswering(Map<String, ResponseBody Function()> byHost) {
       return Request()..dio.httpClientAdapter = _HostAdapter(byHost);
     }
 
-    test('reads the release from the API', () async {
-      final request = requestAnswering({
-        'api.github.com': () => ResponseBody.fromString(
-          '{"tag_name":"v1.2.3","body":"notes"}',
-          200,
-          headers: {
-            Headers.contentTypeHeader: [Headers.jsonContentType],
-          },
-        ),
-      });
-
-      expect(await request.latestRelease(), {
-        'tag_name': 'v1.2.3',
-        'body': 'notes',
-      });
+    Request serving(List<Map<String, dynamic>> releases) => requestAnswering({
+      'api.github.com': () => ResponseBody.fromString(
+        jsonEncode(releases),
+        200,
+        headers: {Headers.contentTypeHeader: [Headers.jsonContentType]},
+      ),
     });
 
-    test(
-      'falls back to the release page when the API is rate limited',
-      () async {
-        final request = requestAnswering({
-          'api.github.com': () => ResponseBody.fromString('{}', 403),
-          'github.com': () => ResponseBody.fromString(
-            '',
-            302,
-            headers: {
-              HttpHeaders.locationHeader: [
-                'https://github.com/owner/repo/releases/tag/v1.2.4',
-              ],
-            },
-          ),
-        });
+    test('chooses newest complete custom release, including prereleases', () async {
+      final request = serving([
+        release('v0.9.4-quickchain.9'),
+        release('v0.9.4-quickchain.15', complete: false),
+        release('v0.9.4-quickchain.14'),
+        release('v0.9.5'),
+        {...release('v0.9.4-quickchain.99'), 'draft': true},
+      ]);
+      expect((await request.latestRelease())['tag_name'], 'v0.9.4-quickchain.14');
+    });
 
-        expect(await request.latestRelease(), {'tag_name': 'v1.2.4'});
-      },
-    );
+    test('never falls back to an official or incomplete release', () async {
+      final request = serving([
+        release('v0.9.5'),
+        release('v0.9.4-quickchain.16', complete: false),
+      ]);
+      await expectLater(request.latestRelease(), throwsStateError);
+    });
 
-    test('fails instead of answering when neither endpoint does', () async {
+    test('reports API errors instead of inventing updates', () async {
       final request = requestAnswering({
         'api.github.com': () => ResponseBody.fromString('{}', 403),
-        'github.com': () => ResponseBody.fromString('', 503),
       });
-
       await expectLater(request.latestRelease(), throwsA(isA<DioException>()));
     });
   });

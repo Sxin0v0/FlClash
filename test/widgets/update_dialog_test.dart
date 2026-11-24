@@ -278,7 +278,7 @@ void main() {
 
       expect(container.read(updateDownloadStateProvider), isNull);
       expect(launched, [
-        Uri.parse('https://github.com/$repository/releases/latest'),
+        Uri.parse('https://github.com/$repository/releases'),
       ]);
       expect(
         printed,

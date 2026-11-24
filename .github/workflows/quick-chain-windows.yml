@@ -19,6 +19,7 @@ env:
 
 jobs:
   windows:
+    if: github.ref == 'refs/heads/quick-chain'
     runs-on: windows-2022
     timeout-minutes: 180
     steps:
@@ -102,7 +103,7 @@ jobs:
       - name: Quick Chain tests
         shell: pwsh
         run: |
-          flutter test test/common/quick_chain_test.dart test/common/task_quick_chain_test.dart test/providers/setup_state_test.dart
+          flutter test test/common/quick_chain_test.dart test/common/task_quick_chain_test.dart test/providers/setup_state_test.dart test/common/quick_chain_update_test.dart test/common/request_test.dart test/widgets/update_dialog_test.dart
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build Windows installer and portable bundle
